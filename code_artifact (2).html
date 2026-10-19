@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>神秘精靈的禮物預言</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  <style>
+    body {
+      background: radial-gradient(circle at center, #16162a 0%, #0a0a14 100%);
+      color: white;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+    .btn {
+      transition: all 0.2s ease-in-out;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.2);
+    }
+    input[type=range] {
+      accent-color: #818cf8;
+    }
+    #secret-star {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      cursor: pointer;
+      opacity: 0.2;
+      transition: opacity 0.3s;
+    }
+    #secret-star:hover {
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container" class="glass-card w-11/12 max-w-md p-8 text-center relative z-10">
+    <div class="text-5xl mb-6">🔮</div>
+    <div id="loading" class="hidden text-gray-300 mb-4 animate-pulse">精靈正在施展讀心術...</div>
+    <div id="question-text" class="text-xl font-medium mb-8 leading-relaxed">
+      你好！我是神秘的願望精靈。你想好想要什麼生日禮物了嗎？讓我來猜猜看！準備好了嗎？
+    </div>
+    
+    <button onclick="startGame()" id="start-btn" class="btn w-full py-3 bg-indigo-600 rounded-xl font-bold text-lg">開始測試</button>
+
+    <!-- 性別選擇按鈕 (預設隱藏) -->
+    <div id="gender-group" class="hidden flex gap-4 justify-center mt-4">
+      <button onclick="selectGender('男生')" class="btn w-1/2 py-3 bg-blue-600 rounded-xl font-bold text-lg text-white border border-blue-400">🙋‍♂️ 男生</button>
+      <button onclick="selectGender('女生')" class="btn w-1/2 py-3 bg-pink-600 rounded-xl font-bold text-lg text-white border border-pink-400">🙋‍♀️ 女生</button>
+    </div>
+
+    <!-- 實用性拉桿 (預設隱藏) -->
+    <div id="slider-group" class="hidden flex-col items-center w-full gap-2 mt-4">
+      <input type="range" id="practicality-slider" min="0" max="5" value="3" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer mb-2">
+      <div class="flex justify-between w-full text-xs text-gray-400 mb-4 px-1">
+        <span>0 (純擺飾)</span>
+        <span class="text-indigo-300 font-bold text-base" id="slider-value-display">3</span>
+        <span>5 (極實用)</span>
+      </div>
+      <button onclick="submitSlider()" class="btn w-full py-3 bg-indigo-500 rounded-xl font-bold text-lg">確認送出</button>
+    </div>
+    
+    <!-- 是非題按鈕 (預設隱藏) -->
+    <div id="button-group" class="hidden flex gap-4 justify-center">
+      <button onclick="answerQuestion('yes')" id="yes-btn" class="btn w-1/2 py-3 bg-emerald-600 rounded-xl font-bold text-lg text-white border border-emerald-400">⭕ 是 (Yes)</button>
+      <button onclick="answerQuestion('no')" id="no-btn" class="btn w-1/2 py-3 bg-rose-600 rounded-xl font-bold text-lg text-white border border-rose-400">❌ 否 (No)</button>
+    </div>
+  </div>
+
+  <div id="admin-panel" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col p-8 overflow-y-auto">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-2xl font-bold text-indigo-400">🧚‍♀️ 仙女專屬秘密後台</h2>
+      <button onclick="closeAdmin()" class="text-gray-400 hover:text-white text-xl">✖ 關閉</button>
+    </div>
+    <div id="admin-result" class="text-gray-200 whitespace-pre-wrap leading-relaxed">
+      目前還沒有測驗結果喔！
+    </div>
+  </div>
+
+  <div id="secret-star" onclick="openAdmin()" title="點擊查看秘密結果">⭐</div>
+
+  <script>
+    const EMAILJS_PUBLIC_KEY = "MSQybvkMqv5cEkFaL"; 
+    const EMAILJS_SERVICE_ID = "service_fyvq8yo"; 
+    const EMAILJS_TEMPLATE_ID = "template_zoltxqp"; 
+
+    emailjs.init(EMAILJS_PUBLIC_KEY);
+
+    const API_KEY = "sk-RUbqV7uPGyK2xHPcwno4tIDPLlwLwJvOZRRBX5b9tlTXlJ2Q"; 
+    const API_URL = "https://ckffai.com/v1/chat/completions";
+    
+    let messages = [
+      {
+        role: "system",
+        content: "你是一個神秘的願望精靈，負責透過聊天推測對方想要的生日禮物。每次只問一個「是非題」(回答是或否)。\n【嚴格限制】：\n1. 問題必須極度簡短，請控制在 20 個字以內。\n2. 降低指向性，只能從「生活習慣、興趣、休閒情境」旁敲側擊（例如：你週末喜歡出門嗎？），絕對不可以問物品類別。\n3. 提問時【絕對不可以】講出任何具體的物品名稱，也【絕對不可以】提到任何價格數字。\n4. 稱呼對方為「你」。"
+      }
+    ];
+    
+    let questionCount = 1; 
+    const MAX_QUESTIONS = 10; 
+    let finalSecretResult = "";
+    let selectedGender = "男生"; // 儲存選擇的性別
+
+    const ui = {
+      questionText: document.getElementById('question-text'),
+      startBtn: document.getElementById('start-btn'),
+      genderGroup: document.getElementById('gender-group'),
+      sliderGroup: document.getElementById('slider-group'),
+      sliderInput: document.getElementById('practicality-slider'),
+      sliderValueDisplay: document.getElementById('slider-value-display'),
+      buttonGroup: document.getElementById('button-group'),
+      yesBtn: document.getElementById('yes-btn'),
+      noBtn: document.getElementById('no-btn'),
+      loading: document.getElementById('loading'),
+      adminPanel: document.getElementById('admin-panel'),
+      adminResult: document.getElementById('admin-result')
+    };
+
+    ui.sliderInput.addEventListener('input', function() {
+      ui.sliderValueDisplay.innerText = this.value;
+    });
+
+    function setWaitState(isWaiting) {
+      if (isWaiting) {
+        ui.loading.classList.remove('hidden');
+        ui.sliderGroup.classList.add('hidden');
+        ui.buttonGroup.classList.add('hidden');
+        ui.genderGroup.classList.add('hidden');
+      } else {
+        ui.loading.classList.add('hidden');
+        ui.buttonGroup.classList.remove('hidden');
+      }
+    }
+
+    async function callOpenAI() {
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({
+            model: 'gemini-3.1-flash-lite',
+            messages: messages,
+            temperature: 0.7
+          })
+        });
+        const data = await response.json();
+        return data.choices[0].message.content;
+      } catch (error) {
+        ui.questionText.innerHTML = `⚠️ 連線錯誤，請檢查網路`;
+        return null;
+      }
+    }
+
+    // 點擊開始測試後，顯示性別選擇
+    function startGame() {
+      ui.startBtn.classList.add('hidden');
+      ui.genderGroup.classList.remove('hidden');
+      ui.genderGroup.classList.add('flex');
+      ui.questionText.innerText = "測驗開始前，精靈需要先感應你的氣場：\n請問你的性別是？";
+    }
+
+    // 選擇性別後，顯示實用性拉桿
+    function selectGender(gender) {
+      selectedGender = gender;
+      ui.genderGroup.classList.add('hidden');
+      ui.genderGroup.classList.remove('flex');
+      
+      ui.sliderGroup.classList.remove('hidden');
+      ui.sliderGroup.classList.add('flex');
+      ui.questionText.innerText = `了解！接下來進入第一題：\n你希望這個生日禮物的「實用性」有多高？\n請滑動拉桿選擇 (0~5)`;
+    }
+
+    async function submitSlider() {
+      const practicalValue = ui.sliderInput.value;
+      setWaitState(true);
+      // 把性別跟實用性分數一起給精靈，但不提錢包跟預算
+      messages.push({ role: "user", content: `我的性別是${selectedGender}，我希望禮物的實用性是 ${practicalValue} 分（0是最不實用, 5是最實用）。請給我第一題簡短的生活習慣是非題。` });
+      const reply = await callOpenAI();
+      if (reply) {
+        messages.push({ role: "assistant", content: reply });
+        ui.questionText.innerText = reply;
+        setWaitState(false);
+      }
+    }
+
+    async function answerQuestion(answer) {
+      questionCount++;
+      const userReply = answer === 'yes' ? '是 (Yes)' : '否 (No)';
+      setWaitState(true);
+
+      if (questionCount < MAX_QUESTIONS) {
+        messages.push({ role: "user", content: `我的回答是：${userReply}。請給我下一題簡短且旁敲側擊的是非題。` });
+        const reply = await callOpenAI();
+        if (reply) {
+          messages.push({ role: "assistant", content: reply });
+          ui.questionText.innerText = reply;
+          setWaitState(false);
+        }
+      } else {
+        messages.push({ role: "user", content: `我的回答是：${userReply}。` });
+        ui.questionText.innerHTML = "✨<br><br>精靈已經讀取完畢你的心願！<br>預言已經悄悄傳送到銀河系深處，請耐心期待你的生日驚喜吧！";
+        ui.loading.classList.remove('hidden');
+        ui.loading.innerText = "正在施展傳送魔法...";
+
+        // 結算時加上 1000 元以上的嚴格條件
+        messages.push({ role: "user", content: `測驗結束。請推測前 3 名這位${selectedGender}最想要的生日禮物與購物關鍵字。直接列出清單即可。\n【必須遵守以下限制】：\n1. 絕對不可包含錢包或皮夾。\n2. 單項物品價格必須在新台幣 1000 元以上。` });
+        const finalReply = await callOpenAI();
+        
+        if (finalReply) {
+          finalSecretResult = finalReply;
+          ui.adminResult.innerText = finalSecretResult;
+          
+          emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+            to_email: "angelahung1031@gmail.com",
+            message: finalSecretResult
+          }).then(function(response) {
+            console.log('郵件發送成功！', response.status, response.text);
+          }, function(error) {
+            console.log('郵件發送失敗...', error);
+          });
+        }
+        ui.loading.classList.add('hidden');
+      }
+    }
+
+    function openAdmin() { ui.adminPanel.classList.remove('hidden'); }
+    function closeAdmin() { ui.adminPanel.classList.add('hidden'); }
+  </script>
+</body>
+</html>
